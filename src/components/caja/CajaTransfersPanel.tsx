@@ -39,7 +39,8 @@ export default function CajaTransfersPanel() {
     }
   }, [accountBalances, channel, pool, route]);
 
-  const flowLabel = ROUTE_OPTIONS.find((item) => item.id === route)?.label ?? '';
+  const flowLabel =
+    ROUTE_OPTIONS?.find((item) => item.id === route)?.label ?? '';
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
