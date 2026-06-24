@@ -8,6 +8,7 @@ import Caja from '../pages/Caja';
 import Configuracion from '../pages/Configuracion';
 import Estadisticas from '../pages/Estadisticas';
 import Home from '../pages/Home';
+import SetupFirebase from '../pages/SetupFirebase';
 import { LoginPage } from '../pages/LoginPage';
 import Metas from '../pages/Metas';
 import { AuthenticatedRouteFallback } from './RouteFallback';
@@ -36,6 +37,7 @@ export function AppRouter() {
                 <Route path={ROUTES.METAS} element={<Metas />} />
                 <Route path={ROUTES.OBJETIVOS} element={<Navigate to={ROUTES.METAS} replace />} />
                 <Route path={ROUTES.ESTADISTICAS} element={<Estadisticas />} />
+                <Route path={ROUTES.SETUP_FIREBASE} element={<SetupFirebase />} />
                 <Route path={ROUTES.CONFIGURACION} element={<Configuracion />} />
                 <Route path={ROUTES.MOVIMIENTOS} element={<Navigate to={ROUTES.CAJA} replace />} />
                 <Route path={ROUTES.AGREGAR} element={<AddPage />} />

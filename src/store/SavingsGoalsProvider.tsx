@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { MetasState, SavingsGoal } from '../types';
-import {
-  GOALS_UPDATED_EVENT,
-  loadMetasState,
-  saveMetasState,
-} from '../utils/savingsGoalsPersistence';
+import { notifyGoalsUpdated, saveMetasState } from '../utils/savingsGoalsPersistence';
 import { getGoalTotal } from '../utils/goalUtils';
-import { STORAGE_KEYS } from '../utils/storage';
+import { subscribeMetasCloud } from '../services/metasCloud';
+import { EMPTY_METAS_STATE } from '../services/firebaseFinance';
 import {
   SavingsGoalsContext,
   type SavingsGoalInput,
@@ -26,41 +23,18 @@ function createGoalRecord(input: SavingsGoalInput): SavingsGoal {
 }
 
 export function SavingsGoalsProvider({ children }: { children: ReactNode }) {
-  const [metasState, setMetasState] = useState<MetasState>(() => loadMetasState());
-
-  const syncFromStorage = useCallback(() => {
-    setMetasState(loadMetasState());
-  }, []);
+  const [metasState, setMetasState] = useState<MetasState>(() => ({
+    pool: { ...EMPTY_METAS_STATE.pool },
+    goals: [],
+  }));
 
   useEffect(() => {
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === STORAGE_KEYS.SAVINGS_GOALS || event.key === null) {
-        syncFromStorage();
-      }
-    };
+    return subscribeMetasCloud((state) => {
+      setMetasState(state);
+    });
+  }, []);
 
-    const handleGoalsUpdated = () => {
-      syncFromStorage();
-    };
-
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        syncFromStorage();
-      }
-    };
-
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener(GOALS_UPDATED_EVENT, handleGoalsUpdated);
-    document.addEventListener('visibilitychange', handleVisibility);
-
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener(GOALS_UPDATED_EVENT, handleGoalsUpdated);
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, [syncFromStorage]);
-
-  const createGoal = useCallback((input: SavingsGoalInput): SavingsGoalsActionResult => {
+  const createGoal = useCallback(async (input: SavingsGoalInput): Promise<SavingsGoalsActionResult> => {
     const title = input.title.trim();
     const targetAmount = Number(input.targetAmount);
 
@@ -76,12 +50,17 @@ export function SavingsGoalsProvider({ children }: { children: ReactNode }) {
       ...metasState,
       goals: [...metasState.goals, createGoalRecord({ title, targetAmount })],
     };
-    saveMetasState(next);
-    setMetasState(next);
-    return { success: true, message: 'Meta creada.' };
+
+    try {
+      await saveMetasState(next);
+      notifyGoalsUpdated();
+      return { success: true, message: 'Meta creada.' };
+    } catch {
+      return { success: false, message: 'No se pudo guardar en Firebase.' };
+    }
   }, [metasState]);
 
-  const removeGoal = useCallback((id: string): SavingsGoalsActionResult => {
+  const removeGoal = useCallback(async (id: string): Promise<SavingsGoalsActionResult> => {
     const goal = metasState.goals.find((item) => item.id === id);
     if (!goal) {
       return { success: false, message: 'Meta no encontrada.' };
@@ -98,9 +77,14 @@ export function SavingsGoalsProvider({ children }: { children: ReactNode }) {
       ...metasState,
       goals: metasState.goals.filter((item) => item.id !== id),
     };
-    saveMetasState(next);
-    setMetasState(next);
-    return { success: true, message: 'Meta eliminada.' };
+
+    try {
+      await saveMetasState(next);
+      notifyGoalsUpdated();
+      return { success: true, message: 'Meta eliminada.' };
+    } catch {
+      return { success: false, message: 'No se pudo guardar en Firebase.' };
+    }
   }, [metasState]);
 
   const value = useMemo<SavingsGoalsStoreValue>(

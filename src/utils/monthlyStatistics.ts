@@ -1,5 +1,5 @@
 import type { Movement } from '../types';
-import { isFixedExpense } from './expenseKind';
+import { isProjectedExpense } from './expenseKind';
 
 export const STATISTICS_PERIODS = [1, 3, 6, 12] as const;
 export type StatisticsPeriod = (typeof STATISTICS_PERIODS)[number];
@@ -93,7 +93,7 @@ export function calculateMonthlyStatistics(
       continue;
     }
 
-    if (isFixedExpense(movement)) {
+    if (isProjectedExpense(movement)) {
       entry.fixed += movement.amount;
     } else {
       entry.eventual += movement.amount;

@@ -1,6 +1,6 @@
 import type { AccountBalances, Movement } from '../types';
 import { getDisponibleTotal } from './accountSystem';
-import { isFixedExpense } from './expenseKind';
+import { isProjectedExpense, resolveExpenseKind } from './expenseKind';
 import { formatCurrency } from './format';
 
 export const PROJECTION_MONTHS_MIN = 1;
@@ -21,6 +21,13 @@ export interface ExpenseProjection {
   statusMessage: string;
 }
 
+export interface GastoProyectadoResumen {
+  fijos: number;
+  recurrentes: number;
+  eventuales: number;
+  totalProyectado: number;
+}
+
 function getMonthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
@@ -29,11 +36,37 @@ function getMonthLabel(date: Date): string {
   return new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(date);
 }
 
-function sumFixedExpensesForMonth(movements: Readonly<Movement>[], monthKey: string): number {
+export const calcularGastoProyectado = (
+  movimientos: Readonly<Movement>[],
+): GastoProyectadoResumen => {
+  const fijos = movimientos.filter(
+    (movement) => movement.type === 'expense' && resolveExpenseKind(movement) === 'fijo',
+  );
+
+  const recurrentes = movimientos.filter(
+    (movement) => movement.type === 'expense' && resolveExpenseKind(movement) === 'recurrente',
+  );
+
+  const eventuales = movimientos.filter(
+    (movement) => movement.type === 'expense' && resolveExpenseKind(movement) === 'eventual',
+  );
+
+  const totalFijos = fijos.reduce((acc, movement) => acc + movement.amount, 0);
+  const totalRecurrentes = recurrentes.reduce((acc, movement) => acc + movement.amount, 0);
+
+  return {
+    fijos: totalFijos,
+    recurrentes: totalRecurrentes,
+    eventuales: eventuales.reduce((acc, movement) => acc + movement.amount, 0),
+    totalProyectado: totalFijos + totalRecurrentes,
+  };
+};
+
+function sumProjectedExpensesForMonth(movements: Readonly<Movement>[], monthKey: string): number {
   let total = 0;
 
   for (const movement of movements) {
-    if (movement.type !== 'expense' || !isFixedExpense(movement)) continue;
+    if (movement.type !== 'expense' || !isProjectedExpense(movement)) continue;
     if (getMonthKey(new Date(movement.date)) !== monthKey) {
       continue;
     }
@@ -44,8 +77,8 @@ function sumFixedExpensesForMonth(movements: Readonly<Movement>[], monthKey: str
 }
 
 /**
- * Proyección del mes siguiente = (suma gastos fijos últimos N meses) / N.
- * N=1 → total del último mes. Solo gastos fijos; eventuales excluidos.
+ * Proyección del mes siguiente = (suma gastos fijos + recurrentes últimos N meses) / N.
+ * N=1 → total del último mes. Eventuales excluidos.
  */
 export function calculateNextMonthProjection(
   movements: Readonly<Movement>[],
@@ -64,7 +97,7 @@ export function calculateNextMonthProjection(
   for (let offset = 1; offset <= months; offset += 1) {
     const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
     const key = getMonthKey(date);
-    const total = sumFixedExpensesForMonth(movements, key);
+    const total = sumProjectedExpensesForMonth(movements, key);
 
     monthlyHistory.push({ key, label: getMonthLabel(date), total });
     fixedExpenseSum += total;

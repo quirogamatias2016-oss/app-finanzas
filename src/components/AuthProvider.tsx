@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session, User } from '../types';
-import { loadUser, saveUser } from '../utils/persistence';
-import { STORAGE_KEYS } from '../utils/storage';
+import { markCloudSyncReady } from '../services/cloudSync';
+import { getCachedUser, saveUserToCloud, subscribeUserCloud } from '../services/userCloud';
 import {
   clearStoredSession,
   createSession,
@@ -11,77 +11,57 @@ import {
 } from '../utils/session';
 import { AuthContext, type AuthContextValue } from '../hooks/authContext';
 
-interface AuthBootstrap {
-  session: Session | null;
-  storedUser: User | null;
-}
-
-function bootstrapAuth(): AuthBootstrap {
-  const storedUser = loadUser();
-  const session = resolvePersistedSession(storedUser);
-  return { session, storedUser };
-}
-
 function credentialsMatch(user: User, username: string, password: string): boolean {
   return user.username === username && user.password === password;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [bootstrap] = useState<AuthBootstrap>(bootstrapAuth);
-  const [session, setSession] = useState<Session | null>(bootstrap.session);
-  const [storedUser, setStoredUser] = useState<User | null>(bootstrap.storedUser);
-
-  const syncFromStorage = useCallback(() => {
-    const user = loadUser();
-    const nextSession = resolvePersistedSession(user);
-    setStoredUser(user);
-    setSession(nextSession);
-  }, []);
+  const [session, setSession] = useState<Session | null>(() => resolvePersistedSession(getCachedUser()));
+  const [storedUser, setStoredUser] = useState<User | null>(() => getCachedUser());
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === STORAGE_KEYS.SESSION || event.key === STORAGE_KEYS.USER) {
-        syncFromStorage();
+    return subscribeUserCloud((user) => {
+      setStoredUser(user);
+      markCloudSyncReady('user');
+      setIsReady(true);
+    });
+  }, []);
+
+  const login = useCallback(async (username: string, password: string) => {
+    const trimmedUsername = username.trim();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedUsername || !trimmedPassword) {
+      return { success: false, message: 'Completa usuario y contraseña.' };
+    }
+
+    const currentUser = getCachedUser();
+
+    if (!currentUser) {
+      const newUser: User = {
+        username: trimmedUsername,
+        password: trimmedPassword,
+      };
+
+      try {
+        await saveUserToCloud(newUser);
+      } catch {
+        return { success: false, message: 'No se pudo guardar en Firebase.' };
       }
-    };
+    } else if (!credentialsMatch(currentUser, trimmedUsername, trimmedPassword)) {
+      return {
+        success: false,
+        message: `Credenciales incorrectas. Usa el usuario «${currentUser.username}».`,
+      };
+    }
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [syncFromStorage]);
+    const newSession = createSession(trimmedUsername);
+    saveSession(newSession);
+    setSession(newSession);
 
-  const login = useCallback(
-    (username: string, password: string) => {
-      const trimmedUsername = username.trim();
-      const trimmedPassword = password.trim();
-
-      if (!trimmedUsername || !trimmedPassword) {
-        return { success: false, message: 'Completa usuario y contraseña.' };
-      }
-
-      const currentUser = loadUser();
-
-      if (!currentUser) {
-        const newUser: User = {
-          username: trimmedUsername,
-          password: trimmedPassword,
-        };
-        saveUser(newUser);
-        setStoredUser(newUser);
-      } else if (!credentialsMatch(currentUser, trimmedUsername, trimmedPassword)) {
-        return {
-          success: false,
-          message: `Credenciales incorrectas. Este dispositivo usa el usuario «${currentUser.username}».`,
-        };
-      }
-
-      const newSession = createSession(trimmedUsername);
-      saveSession(newSession);
-      setSession(newSession);
-
-      return { success: true, message: 'Sesión iniciada.' };
-    },
-    [],
-  );
+    return { success: true, message: 'Sesión iniciada.' };
+  }, []);
 
   const logout = useCallback(() => {
     clearStoredSession();
@@ -95,12 +75,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session: validSession,
       registeredUsername: storedUser?.username ?? null,
       isAuthenticated: validSession !== null,
-      isReady: true,
+      isReady,
       isFirstSetup: storedUser === null,
       login,
       logout,
     };
-  }, [login, logout, session, storedUser]);
+  }, [isReady, login, logout, session, storedUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

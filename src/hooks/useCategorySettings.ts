@@ -21,8 +21,8 @@ export function useCategorySettings() {
   }, [sync]);
 
   const addCategory = useCallback(
-    (type: MovementType, name: string, expenseKind: ExpenseKind = 'eventual') => {
-      const result = persistCategory(type, name, expenseKind);
+    async (type: MovementType, name: string, expenseKind: ExpenseKind = 'eventual') => {
+      const result = await persistCategory(type, name, expenseKind);
       if (result.success) {
         sync();
       }
@@ -32,8 +32,8 @@ export function useCategorySettings() {
   );
 
   const setExpenseCategoryKind = useCallback(
-    (category: string, kind: ExpenseKind) => {
-      const result = persistExpenseCategoryKind(category, kind);
+    async (category: string, kind: ExpenseKind) => {
+      const result = await persistExpenseCategoryKind(category, kind);
       if (result.success) {
         sync();
       }

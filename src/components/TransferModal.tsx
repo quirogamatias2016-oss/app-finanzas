@@ -87,11 +87,11 @@ export default function TransferModal({
     pool,
   ]);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
     try {
-      const result = transferBetweenAccounts(
+      const result = await transferBetweenAccounts(
         buildTransferInput(from, destination, channel, Number(amount), {
           fromGoalId: effectiveFromGoalId || undefined,
           toGoalId: effectiveToGoalId || undefined,

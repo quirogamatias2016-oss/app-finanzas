@@ -24,18 +24,18 @@ export function MetasExternalTransferPanel() {
       ? accountBalances[ledgerAccount][channel]
       : getPoolChannelBalance(pool, channel);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
     const result =
       direction === 'deposit'
-        ? transferBetweenAccounts({
+        ? await transferBetweenAccounts({
             fromAccount: ledgerAccount,
             toAccount: 'objetivos',
             channel,
             amount: Number(amount),
           })
-        : transferBetweenAccounts({
+        : await transferBetweenAccounts({
             fromAccount: 'objetivos',
             toAccount: ledgerAccount,
             channel,

@@ -14,8 +14,8 @@ export interface SavingsGoalsActionResult {
 export interface SavingsGoalsStoreValue {
   goals: Readonly<SavingsGoal>[];
   pool: Readonly<MetasPool>;
-  createGoal: (input: SavingsGoalInput) => SavingsGoalsActionResult;
-  removeGoal: (id: string) => SavingsGoalsActionResult;
+  createGoal: (input: SavingsGoalInput) => Promise<SavingsGoalsActionResult>;
+  removeGoal: (id: string) => Promise<SavingsGoalsActionResult>;
 }
 
 export const SavingsGoalsContext = createContext<SavingsGoalsStoreValue | null>(null);

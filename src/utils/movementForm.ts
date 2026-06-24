@@ -1,4 +1,5 @@
 import type { AccountCategory, ExpenseKind, MovementType, PaymentChannel } from '../types';
+import { INSUFFICIENT_BALANCE_MESSAGE } from './accountSystem';
 import { getExpenseCategoryKind } from './categorySettings';
 import { getCategoriesForType, getDefaultCategory } from '../utils/categories';
 
@@ -46,4 +47,20 @@ export function createSubmitPayload(
 
 export function getCategoryOptions(type: MovementType): readonly string[] {
   return getCategoriesForType(type);
+}
+
+export function getMovementBalanceError(
+  type: MovementType,
+  amount: number,
+  availableBalance: number,
+): string | null {
+  if (type === 'income') {
+    return null;
+  }
+
+  if (type === 'expense' && Number.isFinite(amount) && amount > availableBalance) {
+    return INSUFFICIENT_BALANCE_MESSAGE;
+  }
+
+  return null;
 }

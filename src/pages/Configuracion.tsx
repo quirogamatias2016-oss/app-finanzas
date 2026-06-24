@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExpenseKindSelect } from '../components/ExpenseKindSelect';
+import { SyncStatusPanel } from '../components/config/SyncStatusPanel';
 import { useAuth } from '../hooks/useAuth';
 import { useCategorySettings } from '../hooks/useCategorySettings';
 import { useProjectionSettings } from '../hooks/useProjectionSettings';
@@ -21,14 +22,14 @@ function CategorySection({
   title: string;
   type: 'income' | 'expense';
   categories: string[];
-  onCreate: (type: 'income' | 'expense', name: string) => { success: boolean; message?: string };
+  onCreate: (type: 'income' | 'expense', name: string) => Promise<{ success: boolean; message?: string }>;
 }) {
   const [name, setName] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    const result = onCreate(type, name);
+    const result = await onCreate(type, name);
     if (result.success) {
       setName('');
       setFeedback('Categoría creada.');
@@ -78,16 +79,16 @@ function ExpenseCategorySection({
   onCreate: (
     name: string,
     kind: ExpenseKind,
-  ) => { success: boolean; message?: string };
-  onSetKind: (category: string, kind: ExpenseKind) => void;
+  ) => Promise<{ success: boolean; message?: string }>;
+  onSetKind: (category: string, kind: ExpenseKind) => Promise<{ success: boolean; message?: string }>;
 }) {
   const [name, setName] = useState('');
   const [newKind, setNewKind] = useState<ExpenseKind>('eventual');
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    const result = onCreate(name, newKind);
+    const result = await onCreate(name, newKind);
     if (result.success) {
       setName('');
       setFeedback('Categoría de gasto creada.');
@@ -114,10 +115,13 @@ function ExpenseCategorySection({
                 className="config-panel__kind-select"
                 value={kind}
                 aria-label={`Tipo de gasto para ${category}`}
-                onChange={(event) => onSetKind(category, event.target.value as ExpenseKind)}
+                onChange={(event) => {
+                  void onSetKind(category, event.target.value as ExpenseKind);
+                }}
               >
                 <option value="fijo">{EXPENSE_KIND_LABELS.fijo}</option>
                 <option value="eventual">{EXPENSE_KIND_LABELS.eventual}</option>
+                <option value="recurrente">{EXPENSE_KIND_LABELS.recurrente}</option>
               </select>
             </li>
           );
@@ -167,6 +171,8 @@ export default function Configuracion() {
         ) : null}
       </header>
 
+      <SyncStatusPanel />
+
       <div className="config-panel">
         <h3 className="config-panel__title">Proyección de gastos fijos</h3>
         <p className="config-panel__copy">
@@ -181,7 +187,9 @@ export default function Configuracion() {
               min={PROJECTION_MONTHS_MIN}
               max={PROJECTION_MONTHS_MAX}
               value={lookbackMonths}
-              onChange={(event) => setLookbackMonths(Number(event.target.value))}
+              onChange={(event) => {
+                void setLookbackMonths(Number(event.target.value));
+              }}
             />
             <strong>{lookbackMonths}</strong>
           </div>
@@ -192,8 +200,8 @@ export default function Configuracion() {
         title="Categorías de ingresos"
         type="income"
         categories={incomeCategories}
-        onCreate={(categoryType, categoryName) => {
-          const result = addCategory(categoryType, categoryName);
+        onCreate={async (categoryType, categoryName) => {
+          const result = await addCategory(categoryType, categoryName);
           return result.success
             ? { success: true }
             : { success: false, message: result.message };
@@ -203,8 +211,8 @@ export default function Configuracion() {
       <ExpenseCategorySection
         categories={expenseCategories}
         expenseCategoryKinds={expenseCategoryKinds}
-        onCreate={(categoryName, kind) => {
-          const result = addCategory('expense', categoryName, kind);
+        onCreate={async (categoryName, kind) => {
+          const result = await addCategory('expense', categoryName, kind);
           return result.success
             ? { success: true }
             : { success: false, message: result.message };

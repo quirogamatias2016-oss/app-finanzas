@@ -1,33 +1,25 @@
-import { getItem, setItem, STORAGE_KEYS } from './storage';
+import {
+  getCachedProjectionLookbackMonths,
+  saveProjectionCloud,
+} from '../services/configCloud';
 import { PROJECTION_MONTHS_DEFAULT, PROJECTION_MONTHS_MAX, PROJECTION_MONTHS_MIN } from './expenseProjection';
 
-interface ProjectionSettingsPayload {
-  version: 1;
-  lookbackMonths: number;
+export const PROJECTION_UPDATED_EVENT = 'projection-updated';
+
+function normalizeLookbackMonths(value: number): number {
+  return Math.min(
+    PROJECTION_MONTHS_MAX,
+    Math.max(PROJECTION_MONTHS_MIN, Math.round(value)),
+  );
 }
 
 export function loadProjectionLookbackMonths(): number {
-  const payload = getItem<ProjectionSettingsPayload>(STORAGE_KEYS.PROJECTION_SETTINGS);
-  if (!payload || typeof payload.lookbackMonths !== 'number') {
-    return PROJECTION_MONTHS_DEFAULT;
-  }
-
-  return Math.min(
-    PROJECTION_MONTHS_MAX,
-    Math.max(PROJECTION_MONTHS_MIN, Math.round(payload.lookbackMonths)),
-  );
+  return normalizeLookbackMonths(getCachedProjectionLookbackMonths() || PROJECTION_MONTHS_DEFAULT);
 }
 
-export function saveProjectionLookbackMonths(lookbackMonths: number): number {
-  const normalized = Math.min(
-    PROJECTION_MONTHS_MAX,
-    Math.max(PROJECTION_MONTHS_MIN, Math.round(lookbackMonths)),
-  );
+export async function saveProjectionLookbackMonths(lookbackMonths: number): Promise<number> {
+  const normalized = normalizeLookbackMonths(lookbackMonths);
 
-  setItem(STORAGE_KEYS.PROJECTION_SETTINGS, {
-    version: 1,
-    lookbackMonths: normalized,
-  });
-
+  await saveProjectionCloud(normalized);
   return normalized;
 }

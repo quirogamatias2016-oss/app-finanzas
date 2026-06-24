@@ -13,7 +13,7 @@ import { ExpenseKindSelect } from './ExpenseKindSelect';
 interface MovementEditModalProps {
   movement: Readonly<Movement>;
   onClose: () => void;
-  onSave: (input: UpdateTransactionInput) => FinanceActionResult;
+  onSave: (input: UpdateTransactionInput) => Promise<FinanceActionResult> | FinanceActionResult;
 }
 
 /**
@@ -41,10 +41,10 @@ export function MovementEditModal({ movement, onClose, onSave }: MovementEditMod
     }
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const result = onSave({
+    const result = await onSave({
       id: movement.id,
       description: description.trim(),
       amount: Number(amount),

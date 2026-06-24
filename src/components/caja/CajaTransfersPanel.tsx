@@ -42,14 +42,14 @@ export default function CajaTransfersPanel() {
   const flowLabel =
     ROUTE_OPTIONS?.find((item) => item.id === route)?.label ?? '';
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
     let result;
 
     switch (route) {
       case 'caja-ahorro':
-        result = transferBetweenAccounts({
+        result = await transferBetweenAccounts({
           fromAccount: 'disponible',
           toAccount: 'ahorros',
           channel,
@@ -57,7 +57,7 @@ export default function CajaTransfersPanel() {
         });
         break;
       case 'caja-metas':
-        result = transferBetweenAccounts({
+        result = await transferBetweenAccounts({
           fromAccount: 'disponible',
           toAccount: 'objetivos',
           channel,
@@ -65,7 +65,7 @@ export default function CajaTransfersPanel() {
         });
         break;
       case 'ahorro-caja':
-        result = transferBetweenAccounts({
+        result = await transferBetweenAccounts({
           fromAccount: 'ahorros',
           toAccount: 'disponible',
           channel,
@@ -73,7 +73,7 @@ export default function CajaTransfersPanel() {
         });
         break;
       case 'metas-caja':
-        result = transferBetweenAccounts({
+        result = await transferBetweenAccounts({
           fromAccount: 'objetivos',
           toAccount: 'disponible',
           channel,

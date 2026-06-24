@@ -56,12 +56,12 @@ export function MovementHistory({
     ? (movement: Readonly<Movement>) => setDeletingMovement(movement)
     : undefined;
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deletingMovement) {
       return;
     }
 
-    removeTransaction(deletingMovement.id);
+    await removeTransaction(deletingMovement.id);
     setDeletingMovement(null);
   };
 

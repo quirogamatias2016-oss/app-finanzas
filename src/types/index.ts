@@ -1,7 +1,7 @@
 export type MovementType = 'income' | 'expense';
 
-/** Gastos fijos (proyección) vs eventuales (solo Caja). */
-export type ExpenseKind = 'fijo' | 'eventual';
+/** Gastos fijos, recurrentes (proyección) o eventuales (solo Caja). */
+export type ExpenseKind = 'fijo' | 'eventual' | 'recurrente';
 
 export type LedgerAccount = 'disponible' | 'ahorros';
 
@@ -22,7 +22,7 @@ export interface Movement {
   date: string;
   account: AccountCategory;
   channel: PaymentChannel;
-  /** Solo gastos: fijo (proyección) o eventual. */
+  /** Solo gastos: fijo, recurrente (proyección) o eventual. */
   expenseKind?: ExpenseKind;
 }
 

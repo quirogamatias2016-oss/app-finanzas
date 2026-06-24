@@ -3,6 +3,7 @@ import type { AccountTransfer, Movement } from '../types';
 import {
   calculateAccountBalances,
   INSUFFICIENT_BALANCE_MESSAGE,
+  validateExpenseAgainstAccount,
   validateFinancialIntegrity,
 } from '../utils/accountSystem';
 import {
@@ -23,11 +24,20 @@ import {
   sortMovementsByDateDesc,
 } from '../utils/calculations';
 import { appendMovement, blockMutationAttempt, exposeMovements, removeMovement, replaceMovement } from '../utils/movementLedger';
-import { loadInitialTransactions, loadTransactions, saveTransactions } from '../utils/persistence';
-import { loadTransfers, saveTransfers } from '../utils/transferPersistence';
-import { STORAGE_KEYS } from '../utils/storage';
 import {
-  createTransaction,
+  createInputToCloudPayload,
+  movementToCloudPayload,
+  splitMovimientos,
+  transferToCloudPayload,
+} from '../services/firebaseFinance';
+import {
+  addMovimiento,
+  deleteMovimiento,
+  subscribeMovimientos,
+  updateMovimiento,
+} from '../services/movimientos';
+import { markCloudSyncReady } from '../services/cloudSync';
+import {
   getRecentTransactions,
   groupTransactionsByDate,
   validateTransactionInput,
@@ -42,12 +52,39 @@ import {
   type TransferAccountsInput,
 } from './financeStore';
 
+const FIREBASE_WRITE_ERROR = 'No se pudo guardar en Firebase.';
+
 export function FinanceStoreProvider({ children }: { children: ReactNode }) {
-  const [transactions, setTransactionsState] = useState<Readonly<Movement>[]>(() =>
-    loadInitialTransactions(),
-  );
-  const [transfers, setTransfersState] = useState<Readonly<AccountTransfer>[]>(() => loadTransfers());
+  const [transactions, setTransactionsState] = useState<Readonly<Movement>[]>([]);
+  const [transfers, setTransfersState] = useState<Readonly<AccountTransfer>[]>([]);
   const [goalsTick, setGoalsTick] = useState(0);
+
+  useEffect(() => {
+    const unsubscribeMovimientos = subscribeMovimientos(
+      (items) => {
+        const { transactions: nextTransactions, transfers: nextTransfers } = splitMovimientos(items);
+        setTransactionsState(nextTransactions);
+        setTransfersState(nextTransfers);
+        markCloudSyncReady('movimientos');
+      },
+      () => {
+        markCloudSyncReady('movimientos');
+      },
+    );
+
+    return unsubscribeMovimientos;
+  }, []);
+
+  useEffect(() => {
+    const handleGoalsUpdated = () => {
+      setGoalsTick((tick) => tick + 1);
+    };
+
+    window.addEventListener(GOALS_UPDATED_EVENT, handleGoalsUpdated);
+    return () => {
+      window.removeEventListener(GOALS_UPDATED_EVENT, handleGoalsUpdated);
+    };
+  }, []);
 
   const accountBalances = useMemo(
     () => calculateAccountBalances(transactions, transfers, loadMetasState()),
@@ -74,83 +111,65 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
     [transactions, transfers, goalsTick],
   );
 
-  const syncFromStorage = useCallback(() => {
-    setTransactionsState(loadTransactions());
-    setTransfersState(loadTransfers());
-    setGoalsTick((tick) => tick + 1);
-  }, []);
+  const addTransaction = useCallback(
+    async (input: CreateTransactionInput): Promise<FinanceActionResult> => {
+      const payload: CreateTransactionInput = {
+        ...input,
+        description: input.description.trim(),
+        amount: Number(input.amount),
+        type: input.type,
+        category: input.category.trim(),
+        account: 'disponible',
+        channel: input.channel,
+      };
 
-  useEffect(() => {
-    const handleStorage = (event: StorageEvent) => {
-      if (
-        event.key === STORAGE_KEYS.MOVEMENTS ||
-        event.key === STORAGE_KEYS.TRANSFERS ||
-        event.key === STORAGE_KEYS.SAVINGS_GOALS ||
-        event.key === null
-      ) {
-        syncFromStorage();
-      }
-    };
+      const validation = validateTransactionInput(payload);
 
-    const handleGoalsUpdated = () => {
-      setGoalsTick((tick) => tick + 1);
-    };
-
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        syncFromStorage();
-      }
-    };
-
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener(GOALS_UPDATED_EVENT, handleGoalsUpdated);
-    document.addEventListener('visibilitychange', handleVisibility);
-
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener(GOALS_UPDATED_EVENT, handleGoalsUpdated);
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, [syncFromStorage]);
-
-  const addTransaction = useCallback((input: CreateTransactionInput): FinanceActionResult => {
-    const payload: CreateTransactionInput = {
-      ...input,
-      description: input.description.trim(),
-      amount: Number(input.amount),
-      type: input.type,
-      category: input.category.trim(),
-      account: 'disponible',
-      channel: input.channel,
-    };
-
-    const validation = validateTransactionInput(payload);
-
-    if (!validation.valid) {
-      return { success: false, message: validation.message };
-    }
-
-    const transaction = createTransaction(payload);
-    let result: FinanceActionResult = {
-      success: true,
-      message: 'Operación registrada en Caja.',
-    };
-
-    setTransactionsState((current) => {
-      const next = appendMovement(current, transaction);
-      const integrity = validateFinancialIntegrity(next, transfers, loadMetasState());
-
-      if (!integrity.valid) {
-        result = { success: false, message: integrity.message };
-        return current;
+      if (!validation.valid) {
+        return { success: false, message: validation.message };
       }
 
-      saveTransactions(next);
-      return next;
-    });
+      if (payload.type === 'expense') {
+        const expenseCheck = validateExpenseAgainstAccount(
+          transactions,
+          transfers,
+          payload.account,
+          payload.channel,
+          payload.amount,
+          loadMetasState(),
+        );
 
-    return result;
-  }, [transfers]);
+        if (!expenseCheck.valid) {
+          return { success: false, message: expenseCheck.message };
+        }
+
+        const preview = appendMovement(transactions, {
+          id: 'preview',
+          description: payload.description,
+          amount: payload.amount,
+          type: 'expense',
+          category: resolveCategory(payload.category, payload.type),
+          date: new Date().toISOString(),
+          account: payload.account,
+          channel: payload.channel,
+          expenseKind: payload.expenseKind,
+        });
+        const integrity = validateFinancialIntegrity(preview, transfers, loadMetasState());
+
+        if (!integrity.valid) {
+          return { success: false, message: integrity.message };
+        }
+      }
+
+      try {
+        await addMovimiento(createInputToCloudPayload(payload));
+        return { success: true, message: 'Operación registrada en Caja.' };
+      } catch {
+        return { success: false, message: FIREBASE_WRITE_ERROR };
+      }
+    },
+    [transactions, transfers],
+  );
 
   const addIncome = useCallback(
     (description: string, amount: number, category: string) =>
@@ -178,36 +197,30 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
     [addTransaction],
   );
 
-  const updateTransaction = useCallback((input: UpdateTransactionInput): FinanceActionResult => {
-    const payload: UpdateTransactionInput = {
-      ...input,
-      description: input.description.trim(),
-      amount: Number(input.amount),
-      type: input.type,
-      category: input.category.trim(),
-      date: input.date,
-      account: 'disponible',
-      channel: input.channel,
-    };
+  const updateTransaction = useCallback(
+    async (input: UpdateTransactionInput): Promise<FinanceActionResult> => {
+      const payload: UpdateTransactionInput = {
+        ...input,
+        description: input.description.trim(),
+        amount: Number(input.amount),
+        type: input.type,
+        category: input.category.trim(),
+        date: input.date,
+        account: 'disponible',
+        channel: input.channel,
+      };
 
-    const validation = validateUpdateTransactionInput(payload);
+      const validation = validateUpdateTransactionInput(payload);
 
-    if (!validation.valid) {
-      return { success: false, message: validation.message };
-    }
-
-    let result: FinanceActionResult = {
-      success: true,
-      message: 'Operación actualizada.',
-    };
-
-    setTransactionsState((current) => {
-      if (!current.some((item) => item.id === payload.id)) {
-        result = { success: false, message: 'Registro no encontrado.' };
-        return current;
+      if (!validation.valid) {
+        return { success: false, message: validation.message };
       }
 
-      const next = replaceMovement(current, payload.id, {
+      if (!transactions.some((item) => item.id === payload.id)) {
+        return { success: false, message: 'Registro no encontrado.' };
+      }
+
+      const nextMovement = replaceMovement(transactions, payload.id, {
         description: payload.description,
         amount: payload.amount,
         type: payload.type,
@@ -216,51 +229,82 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
         account: payload.account,
         channel: payload.channel,
         expenseKind: payload.expenseKind,
-      });
+      }).find((item) => item.id === payload.id);
 
+      if (!nextMovement) {
+        return { success: false, message: 'Registro no encontrado.' };
+      }
+
+      if (payload.type === 'expense') {
+        const expenseCheck = validateExpenseAgainstAccount(
+          transactions,
+          transfers,
+          payload.account,
+          payload.channel,
+          payload.amount,
+          loadMetasState(),
+          payload.id,
+        );
+
+        if (!expenseCheck.valid) {
+          return { success: false, message: expenseCheck.message };
+        }
+
+        const integrity = validateFinancialIntegrity(
+          replaceMovement(transactions, payload.id, {
+            description: payload.description,
+            amount: payload.amount,
+            type: payload.type,
+            date: payload.date,
+            category: resolveCategory(payload.category, payload.type),
+            account: payload.account,
+            channel: payload.channel,
+            expenseKind: payload.expenseKind,
+          }),
+          transfers,
+          loadMetasState(),
+        );
+
+        if (!integrity.valid) {
+          return { success: false, message: integrity.message };
+        }
+      }
+
+      try {
+        await updateMovimiento(payload.id, movementToCloudPayload(nextMovement));
+        return { success: true, message: 'Operación actualizada.' };
+      } catch {
+        return { success: false, message: FIREBASE_WRITE_ERROR };
+      }
+    },
+    [transactions, transfers],
+  );
+
+  const removeTransaction = useCallback(
+    async (id: string): Promise<FinanceActionResult> => {
+      if (!transactions.some((item) => item.id === id)) {
+        return { success: false, message: 'Registro no encontrado.' };
+      }
+
+      const next = removeMovement(transactions, id);
       const integrity = validateFinancialIntegrity(next, transfers, loadMetasState());
 
       if (!integrity.valid) {
-        result = { success: false, message: integrity.message };
-        return current;
+        return { success: false, message: integrity.message };
       }
 
-      saveTransactions(next);
-      return next;
-    });
-
-    return result;
-  }, [transfers]);
-
-  const removeTransaction = useCallback((id: string): FinanceActionResult => {
-    let result: FinanceActionResult = {
-      success: true,
-      message: 'Registro eliminado.',
-    };
-
-    setTransactionsState((current) => {
-      if (!current.some((item) => item.id === id)) {
-        result = { success: false, message: 'Registro no encontrado.' };
-        return current;
+      try {
+        await deleteMovimiento(id);
+        return { success: true, message: 'Registro eliminado.' };
+      } catch {
+        return { success: false, message: FIREBASE_WRITE_ERROR };
       }
-
-      const next = removeMovement(current, id);
-      const integrity = validateFinancialIntegrity(next, transfers, loadMetasState());
-
-      if (!integrity.valid) {
-        result = { success: false, message: integrity.message };
-        return current;
-      }
-
-      saveTransactions(next);
-      return next;
-    });
-
-    return result;
-  }, [transfers]);
+    },
+    [transactions, transfers],
+  );
 
   const transferBetweenAccounts = useCallback(
-    (input: TransferAccountsInput): FinanceActionResult => {
+    async (input: TransferAccountsInput): Promise<FinanceActionResult> => {
       const amount = Number(input.amount);
       const metasState = loadMetasState();
       const validation = validateGoalAwareTransfer(input, accountBalances, metasState);
@@ -281,37 +325,55 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
         if (!hasNonNegativeMetasState(nextMetasState)) {
           return { success: false, message: INSUFFICIENT_BALANCE_MESSAGE };
         }
-
-        saveMetasState(nextMetasState);
-        notifyGoalsUpdated();
       }
 
-      const transfer: AccountTransfer = {
-        id: crypto.randomUUID(),
-        channel: input.channel,
-        amount,
-        date: new Date().toISOString(),
-        fromAccount: input.fromAccount,
-        fromGoalId: input.fromGoalId,
-        toAccount: input.toAccount,
-        toGoalId: input.toGoalId,
-        transferKind: inferTransferKind(input),
-      };
-
-      const nextTransfers = [...transfers, transfer];
+      const nextTransfers = [
+        ...transfers,
+        {
+          id: 'preview',
+          channel: input.channel,
+          amount,
+          date: new Date().toISOString(),
+          fromAccount: input.fromAccount,
+          fromGoalId: input.fromGoalId,
+          toAccount: input.toAccount,
+          toGoalId: input.toGoalId,
+          transferKind: inferTransferKind(input),
+        },
+      ];
       const integrity = validateFinancialIntegrity(transactions, nextTransfers, nextMetasState);
 
       if (!integrity.valid) {
-        saveMetasState(metasState);
-        notifyGoalsUpdated();
         return { success: false, message: integrity.message };
       }
 
-      setTransfersState(nextTransfers);
-      saveTransfers(nextTransfers);
-      setGoalsTick((tick) => tick + 1);
+      try {
+        if (nextMetasState !== metasState) {
+          await saveMetasState(nextMetasState);
+          notifyGoalsUpdated();
+        }
 
-      return { success: true, message: 'Transferencia realizada correctamente.' };
+        await addMovimiento(
+          transferToCloudPayload({
+            amount,
+            channel: input.channel,
+            fromAccount: input.fromAccount,
+            toAccount: input.toAccount,
+            fromGoalId: input.fromGoalId,
+            toGoalId: input.toGoalId,
+            transferKind: inferTransferKind(input),
+          }),
+        );
+
+        return { success: true, message: 'Transferencia realizada correctamente.' };
+      } catch {
+        if (nextMetasState !== metasState) {
+          await saveMetasState(metasState);
+          notifyGoalsUpdated();
+        }
+
+        return { success: false, message: FIREBASE_WRITE_ERROR };
+      }
     },
     [accountBalances, transactions, transfers],
   );

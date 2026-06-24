@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import type { MovementType } from '../types';
 import type { FinanceActionResult } from '../store/financeStore';
 import type { CreateTransactionInput } from '../utils/transactions';
+import { useFinanceStore } from '../hooks/useFinance';
 import { ChannelSelect } from './ChannelSelect';
 import { CategorySelect } from './CategorySelect';
 import { ExpenseKindSelect } from './ExpenseKindSelect';
@@ -13,7 +14,7 @@ import {
 import { getExpenseCategoryKind } from '../utils/categorySettings';
 
 interface MovementFormProps {
-  onSubmit: (input: CreateTransactionInput) => FinanceActionResult;
+  onSubmit: (input: CreateTransactionInput) => Promise<FinanceActionResult> | FinanceActionResult;
   fixedType?: MovementType;
   submitLabel?: string;
   onSuccess?: () => void;
@@ -25,6 +26,7 @@ export function MovementForm({
   submitLabel = 'Guardar',
   onSuccess,
 }: MovementFormProps) {
+  const { accountBalances } = useFinanceStore();
   const [type, setType] = useState<MovementType>(fixedType ?? 'expense');
   const [form, setForm] = useState(() => createMovementFormState(fixedType ?? 'expense'));
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(
@@ -35,6 +37,7 @@ export function MovementForm({
 
   const handleTypeChange = (nextType: MovementType) => {
     setType(nextType);
+    setFeedback(null);
     setForm((current) => ({
       ...current,
       category: getCategoryOptions(nextType).includes(current.category)
@@ -50,10 +53,30 @@ export function MovementForm({
     }
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const result = onSubmit(
+    const isIngreso = activeType === 'income';
+    const isGasto = activeType === 'expense';
+    const amount = Number(form.amount);
+    const availableBalance = accountBalances.disponible[form.channel];
+
+    let error: string | null = null;
+
+    if (isIngreso) {
+      error = null;
+    }
+
+    if (isGasto && amount > availableBalance) {
+      error = 'Saldo insuficiente';
+    }
+
+    if (error) {
+      setFeedback({ type: 'error', text: error });
+      return;
+    }
+
+    const result = await onSubmit(
       createSubmitPayload(
         form.description,
         form.amount,

@@ -88,7 +88,7 @@ export function GlobalTransferModal({ preset, onClose }: GlobalTransferModalProp
     setToEndpoint({ type: 'meta', goalId });
   };
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
     if (!isValidTransferEndpoints(fromEndpoint, toEndpoint)) {
@@ -99,7 +99,7 @@ export function GlobalTransferModal({ preset, onClose }: GlobalTransferModalProp
       return;
     }
 
-    const result = transferBetweenAccounts(
+    const result = await transferBetweenAccounts(
       buildTransferAccountsInput(fromEndpoint, toEndpoint, channel, Number(amount)),
     );
 

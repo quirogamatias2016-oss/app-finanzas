@@ -13,10 +13,10 @@ export function CreateGoalForm({ onSuccess }: CreateGoalFormProps) {
     null,
   );
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    const result = createGoal({ title, targetAmount: Number(targetAmount) });
+    const result = await createGoal({ title, targetAmount: Number(targetAmount) });
 
     setFeedback({
       type: result.success ? 'success' : 'error',

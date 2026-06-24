@@ -28,12 +28,12 @@ export interface FinanceStoreValue {
   groupedTransactions: TransactionGroup[];
   accountBalances: AccountBalances;
   summary: FinanceSummary;
-  addTransaction: (input: CreateTransactionInput) => FinanceActionResult;
-  addIncome: (description: string, amount: number, category: string) => FinanceActionResult;
-  addExpense: (description: string, amount: number, category: string) => FinanceActionResult;
-  updateTransaction: (input: UpdateTransactionInput) => FinanceActionResult;
-  removeTransaction: (id: string) => FinanceActionResult;
-  transferBetweenAccounts: (input: TransferAccountsInput) => FinanceActionResult;
+  addTransaction: (input: CreateTransactionInput) => Promise<FinanceActionResult>;
+  addIncome: (description: string, amount: number, category: string) => Promise<FinanceActionResult>;
+  addExpense: (description: string, amount: number, category: string) => Promise<FinanceActionResult>;
+  updateTransaction: (input: UpdateTransactionInput) => Promise<FinanceActionResult>;
+  removeTransaction: (id: string) => Promise<FinanceActionResult>;
+  transferBetweenAccounts: (input: TransferAccountsInput) => Promise<FinanceActionResult>;
   clearTransactions: () => FinanceActionResult;
 }
 

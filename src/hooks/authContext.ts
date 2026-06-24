@@ -7,7 +7,7 @@ export interface AuthContextValue {
   isAuthenticated: boolean;
   isReady: boolean;
   isFirstSetup: boolean;
-  login: (username: string, password: string) => { success: boolean; message: string };
+  login: (username: string, password: string) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
 }
 

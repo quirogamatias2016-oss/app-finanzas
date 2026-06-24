@@ -37,27 +37,27 @@ export function MetasInternalTransferPanel({ compact = false }: MetasInternalTra
     return 0;
   })();
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
     let result;
 
     if (mode === 'pool-to-meta') {
-      result = transferBetweenAccounts({
+      result = await transferBetweenAccounts({
         fromAccount: 'objetivos',
         toGoalId,
         channel,
         amount: Number(amount),
       });
     } else if (mode === 'meta-to-pool') {
-      result = transferBetweenAccounts({
+      result = await transferBetweenAccounts({
         fromGoalId,
         toAccount: 'objetivos',
         channel,
         amount: Number(amount),
       });
     } else {
-      result = transferBetweenAccounts({
+      result = await transferBetweenAccounts({
         fromGoalId,
         toGoalId,
         channel,

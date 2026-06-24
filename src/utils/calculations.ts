@@ -1,5 +1,5 @@
 import type { AccountBalances, AccountCategory, AccountTransfer, CategoryTotal, MetasState, Movement } from '../types';
-import { isFixedExpense } from './expenseKind';
+import { isProjectedExpense } from './expenseKind';
 import {
   calculateAccountBalances,
   getPatrimonioTotal,
@@ -156,7 +156,7 @@ export function calculateCurrentMonthMovementSummary(
 
     expenses += movement.amount;
 
-    if (isFixedExpense(movement)) {
+    if (isProjectedExpense(movement)) {
       fixedExpenses += movement.amount;
     } else {
       eventualExpenses += movement.amount;

@@ -79,7 +79,8 @@ export function validateTransactionInput(
     input.type === 'expense' &&
     input.expenseKind &&
     input.expenseKind !== 'fijo' &&
-    input.expenseKind !== 'eventual'
+    input.expenseKind !== 'eventual' &&
+    input.expenseKind !== 'recurrente'
   ) {
     return { valid: false, message: 'Selecciona un tipo de gasto válido.' };
   }

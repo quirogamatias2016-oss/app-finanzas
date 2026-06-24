@@ -11,9 +11,9 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const result = login(username, password);
+    const result = await login(username, password);
 
     if (!result.success) {
       setError(result.message);
