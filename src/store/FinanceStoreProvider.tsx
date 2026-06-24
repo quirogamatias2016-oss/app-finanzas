@@ -3,14 +3,13 @@ import type { AccountTransfer, Movement } from '../types';
 import {
   calculateAccountBalances,
   INSUFFICIENT_BALANCE_MESSAGE,
-  validateExpenseAgainstAccount,
+  validateCajaTransaction,
   validateFinancialIntegrity,
 } from '../utils/accountSystem';
 import {
   GOALS_UPDATED_EVENT,
   loadMetasState,
   notifyGoalsUpdated,
-  saveMetasState,
 } from '../utils/savingsGoalsPersistence';
 import {
   applyMetasStateTransfer,
@@ -25,18 +24,12 @@ import {
 } from '../utils/calculations';
 import { appendMovement, blockMutationAttempt, exposeMovements, removeMovement, replaceMovement } from '../utils/movementLedger';
 import {
-  createInputToCloudPayload,
-  movementToCloudPayload,
+  createTransactionRecord,
+  movementToRecord,
   splitMovimientos,
-  transferToCloudPayload,
-} from '../services/firebaseFinance';
-import {
-  addMovimiento,
-  deleteMovimiento,
-  subscribeMovimientos,
-  updateMovimiento,
-} from '../services/movimientos';
-import { markCloudSyncReady } from '../services/cloudSync';
+  transferToRecord,
+} from '../services/localFinance';
+import { APP_STORAGE_UPDATED_EVENT, loadAppState, patchAppState } from '../services/appStorage';
 import {
   getRecentTransactions,
   groupTransactionsByDate,
@@ -52,27 +45,23 @@ import {
   type TransferAccountsInput,
 } from './financeStore';
 
-const FIREBASE_WRITE_ERROR = 'No se pudo guardar en Firebase.';
+const SAVE_ERROR = 'No se pudo guardar en el dispositivo.';
+
+function readLedgerFromStorage(): { transactions: Movement[]; transfers: AccountTransfer[] } {
+  return splitMovimientos(loadAppState().movimientos);
+}
 
 export function FinanceStoreProvider({ children }: { children: ReactNode }) {
-  const [transactions, setTransactionsState] = useState<Readonly<Movement>[]>([]);
-  const [transfers, setTransfersState] = useState<Readonly<AccountTransfer>[]>([]);
+  const [{ transactions, transfers }, setLedger] = useState(() => readLedgerFromStorage());
   const [goalsTick, setGoalsTick] = useState(0);
 
   useEffect(() => {
-    const unsubscribeMovimientos = subscribeMovimientos(
-      (items) => {
-        const { transactions: nextTransactions, transfers: nextTransfers } = splitMovimientos(items);
-        setTransactionsState(nextTransactions);
-        setTransfersState(nextTransfers);
-        markCloudSyncReady('movimientos');
-      },
-      () => {
-        markCloudSyncReady('movimientos');
-      },
-    );
+    const syncFromStorage = () => {
+      setLedger(readLedgerFromStorage());
+    };
 
-    return unsubscribeMovimientos;
+    window.addEventListener(APP_STORAGE_UPDATED_EVENT, syncFromStorage);
+    return () => window.removeEventListener(APP_STORAGE_UPDATED_EVENT, syncFromStorage);
   }, []);
 
   useEffect(() => {
@@ -129,18 +118,28 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
         return { success: false, message: validation.message };
       }
 
+      if (payload.type === 'income') {
+        try {
+          patchAppState((current) => ({
+            ...current,
+            movimientos: [...current.movimientos, createTransactionRecord(payload)],
+          }));
+          return { success: true, message: 'Operación registrada en Caja.' };
+        } catch {
+          return { success: false, message: SAVE_ERROR };
+        }
+      }
+
       if (payload.type === 'expense') {
-        const expenseCheck = validateExpenseAgainstAccount(
-          transactions,
-          transfers,
-          payload.account,
-          payload.channel,
+        const balances = calculateAccountBalances(transactions, transfers, loadMetasState());
+        const cajaCheck = validateCajaTransaction(
+          payload.type,
           payload.amount,
-          loadMetasState(),
+          balances.disponible[payload.channel],
         );
 
-        if (!expenseCheck.valid) {
-          return { success: false, message: expenseCheck.message };
+        if (!cajaCheck.valid) {
+          return { success: false, message: cajaCheck.message };
         }
 
         const preview = appendMovement(transactions, {
@@ -162,10 +161,13 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        await addMovimiento(createInputToCloudPayload(payload));
+        patchAppState((state) => ({
+          ...state,
+          movimientos: [...state.movimientos, createTransactionRecord(payload)],
+        }));
         return { success: true, message: 'Operación registrada en Caja.' };
       } catch {
-        return { success: false, message: FIREBASE_WRITE_ERROR };
+        return { success: false, message: SAVE_ERROR };
       }
     },
     [transactions, transfers],
@@ -236,18 +238,19 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
       }
 
       if (payload.type === 'expense') {
-        const expenseCheck = validateExpenseAgainstAccount(
-          transactions,
+        const balances = calculateAccountBalances(
+          transactions.filter((item) => item.id !== payload.id),
           transfers,
-          payload.account,
-          payload.channel,
-          payload.amount,
           loadMetasState(),
-          payload.id,
+        );
+        const cajaCheck = validateCajaTransaction(
+          payload.type,
+          payload.amount,
+          balances.disponible[payload.channel],
         );
 
-        if (!expenseCheck.valid) {
-          return { success: false, message: expenseCheck.message };
+        if (!cajaCheck.valid) {
+          return { success: false, message: cajaCheck.message };
         }
 
         const integrity = validateFinancialIntegrity(
@@ -271,10 +274,14 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        await updateMovimiento(payload.id, movementToCloudPayload(nextMovement));
+        const record = movementToRecord(nextMovement);
+        patchAppState((state) => ({
+          ...state,
+          movimientos: state.movimientos.map((item) => (item.id === payload.id ? record : item)),
+        }));
         return { success: true, message: 'Operación actualizada.' };
       } catch {
-        return { success: false, message: FIREBASE_WRITE_ERROR };
+        return { success: false, message: SAVE_ERROR };
       }
     },
     [transactions, transfers],
@@ -294,10 +301,13 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        await deleteMovimiento(id);
+        patchAppState((state) => ({
+          ...state,
+          movimientos: state.movimientos.filter((item) => item.id !== id),
+        }));
         return { success: true, message: 'Registro eliminado.' };
       } catch {
-        return { success: false, message: FIREBASE_WRITE_ERROR };
+        return { success: false, message: SAVE_ERROR };
       }
     },
     [transactions, transfers],
@@ -348,31 +358,30 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
       }
 
       try {
+        patchAppState((state) => ({
+          ...state,
+          metas: nextMetasState,
+          movimientos: [
+            ...state.movimientos,
+            transferToRecord({
+              amount,
+              channel: input.channel,
+              fromAccount: input.fromAccount,
+              toAccount: input.toAccount,
+              fromGoalId: input.fromGoalId,
+              toGoalId: input.toGoalId,
+              transferKind: inferTransferKind(input),
+            }),
+          ],
+        }));
+
         if (nextMetasState !== metasState) {
-          await saveMetasState(nextMetasState);
           notifyGoalsUpdated();
         }
-
-        await addMovimiento(
-          transferToCloudPayload({
-            amount,
-            channel: input.channel,
-            fromAccount: input.fromAccount,
-            toAccount: input.toAccount,
-            fromGoalId: input.fromGoalId,
-            toGoalId: input.toGoalId,
-            transferKind: inferTransferKind(input),
-          }),
-        );
 
         return { success: true, message: 'Transferencia realizada correctamente.' };
       } catch {
-        if (nextMetasState !== metasState) {
-          await saveMetasState(metasState);
-          notifyGoalsUpdated();
-        }
-
-        return { success: false, message: FIREBASE_WRITE_ERROR };
+        return { success: false, message: SAVE_ERROR };
       }
     },
     [accountBalances, transactions, transfers],

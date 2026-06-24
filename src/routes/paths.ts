@@ -1,4 +1,5 @@
 export const ROUTES = {
+  /** @deprecated ya no hay login */
   LOGIN: '/login',
   DASHBOARD: '/dashboard',
   CAJA: '/caja',
@@ -7,6 +8,7 @@ export const ROUTES = {
   OBJETIVOS: '/objetivos',
   CONFIGURACION: '/configuracion',
   ESTADISTICAS: '/estadisticas',
+  /** @deprecated ya no se usa Firebase */
   SETUP_FIREBASE: '/setup-firebase',
   AGREGAR: '/agregar',
   NUEVO_INGRESO: '/nuevo-ingreso',
@@ -20,7 +22,7 @@ export const ROUTES = {
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];
 
 export const PAGE_SUBTITLES: Record<AppRoute, string> = {
-  [ROUTES.LOGIN]: 'Acceso seguro',
+  [ROUTES.LOGIN]: 'Inicio',
   [ROUTES.DASHBOARD]: 'Inicio',
   [ROUTES.CAJA]: 'Caja',
   [ROUTES.AHORRO]: 'Ahorro',
@@ -28,7 +30,7 @@ export const PAGE_SUBTITLES: Record<AppRoute, string> = {
   [ROUTES.OBJETIVOS]: 'Objetivos',
   [ROUTES.CONFIGURACION]: 'Configuración',
   [ROUTES.ESTADISTICAS]: 'Estadísticas',
-  [ROUTES.SETUP_FIREBASE]: 'Configurar Firebase',
+  [ROUTES.SETUP_FIREBASE]: 'Inicio',
   [ROUTES.AGREGAR]: 'Agregar',
   [ROUTES.NUEVO_INGRESO]: 'Agregar',
   [ROUTES.NUEVO_GASTO]: 'Agregar',
@@ -75,14 +77,6 @@ export function isAppRoute(path: string): path is AppRoute {
   return (Object.values(ROUTES) as string[]).includes(path);
 }
 
-export function resolveDefaultRoute(isAuthenticated: boolean): AppRoute {
-  return isAuthenticated ? ROUTES.DASHBOARD : ROUTES.LOGIN;
-}
-
-export function resolvePostLoginPath(from: unknown): AppRoute {
-  if (typeof from === 'string' && isAppRoute(from) && from !== ROUTES.LOGIN) {
-    return from;
-  }
-
+export function resolveDefaultRoute(): AppRoute {
   return ROUTES.DASHBOARD;
 }

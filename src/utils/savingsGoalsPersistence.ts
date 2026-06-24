@@ -1,23 +1,27 @@
-import type { MetasState, SavingsGoal } from '../types';
-import { getCachedMetasState, saveMetasToCloud } from '../services/metasCloud';
+import type { MetasState } from '../types';
+import { loadAppState, patchAppState } from '../services/appStorage';
 
 export function loadMetasState(): MetasState {
-  return getCachedMetasState();
+  return loadAppState().metas;
 }
 
 export function saveMetasState(state: MetasState): Promise<void> {
-  return saveMetasToCloud(state);
+  patchAppState((current) => ({
+    ...current,
+    metas: state,
+  }));
+  return Promise.resolve();
 }
 
 /** @deprecated use loadMetasState */
-export function loadSavingsGoals(): SavingsGoal[] {
+export function loadSavingsGoals() {
   return loadMetasState().goals;
 }
 
-/** @deprecated use saveMetasState — conserva el pool actual */
-export function saveSavingsGoals(goals: Readonly<SavingsGoal>[]): void {
+/** @deprecated use saveMetasState */
+export function saveSavingsGoals(goals: Readonly<MetasState['goals']>): void {
   const current = loadMetasState();
-  saveMetasState({ ...current, goals: [...goals] });
+  void saveMetasState({ ...current, goals: [...goals] });
 }
 
 export const GOALS_UPDATED_EVENT = 'goals-updated';

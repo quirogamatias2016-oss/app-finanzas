@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="App Finanzas">
+  <rect width="512" height="512" rx="112" fill="#000000"/>
+  <rect x="32" y="32" width="448" height="448" rx="96" fill="none" stroke="#2dd4bf" stroke-width="8"/>
+  <text x="256" y="310" text-anchor="middle" fill="#2dd4bf" font-size="220" font-family="system-ui,Segoe UI,sans-serif" font-weight="700">F</text>
+</svg>

@@ -1,8 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ExpenseKindSelect } from '../components/ExpenseKindSelect';
-import { SyncStatusPanel } from '../components/config/SyncStatusPanel';
-import { useAuth } from '../hooks/useAuth';
+import { PwaInstallPanel } from '../components/config/PwaInstallPanel';
 import { useCategorySettings } from '../hooks/useCategorySettings';
 import { useProjectionSettings } from '../hooks/useProjectionSettings';
 import type { ExpenseKind } from '../types';
@@ -11,7 +9,6 @@ import {
   PROJECTION_MONTHS_MIN,
 } from '../utils/expenseProjection';
 import { EXPENSE_KIND_LABELS } from '../utils/expenseKind';
-import { ROUTES } from '../routes/paths';
 
 function CategorySection({
   title,
@@ -150,28 +147,27 @@ function ExpenseCategorySection({
 }
 
 export default function Configuracion() {
-  const { session, logout } = useAuth();
-  const navigate = useNavigate();
   const { lookbackMonths, setLookbackMonths } = useProjectionSettings();
   const { incomeCategories, expenseCategories, expenseCategoryKinds, addCategory, setExpenseCategoryKind } =
     useCategorySettings();
-
-  const handleLogout = () => {
-    logout();
-    navigate(ROUTES.LOGIN, { replace: true });
-  };
 
   return (
     <div className="app-page">
       <header className="app-page__header">
         <p className="app-page__eyebrow">Ajustes</p>
         <h2 className="app-page__title">Configuración</h2>
-        {session?.username ? (
-          <p className="app-page__caption">Usuario: {session.username}</p>
-        ) : null}
+        <p className="app-page__caption">Datos guardados en este dispositivo (sin conexión requerida)</p>
       </header>
 
-      <SyncStatusPanel />
+      <PwaInstallPanel />
+
+      <div className="config-panel">
+        <h3 className="config-panel__title">Almacenamiento local</h3>
+        <p className="config-panel__copy">
+          Cada ingreso, gasto o transferencia se guarda al instante en{' '}
+          <code>localStorage.setItem(&quot;app-finanzas&quot;, …)</code>. Sin internet, sin servidor, sin login.
+        </p>
+      </div>
 
       <div className="config-panel">
         <h3 className="config-panel__title">Proyección de gastos fijos</h3>
@@ -219,13 +215,6 @@ export default function Configuracion() {
         }}
         onSetKind={setExpenseCategoryKind}
       />
-
-      <div className="config-panel">
-        <h3 className="config-panel__title">Sesión</h3>
-        <button type="button" className="btn btn--danger btn--compact" onClick={handleLogout}>
-          Cerrar sesión
-        </button>
-      </div>
     </div>
   );
 }

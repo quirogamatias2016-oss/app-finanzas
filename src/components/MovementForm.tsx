@@ -10,6 +10,7 @@ import {
   createMovementFormState,
   createSubmitPayload,
   getCategoryOptions,
+  getMovementBalanceError,
 } from '../utils/movementForm';
 import { getExpenseCategoryKind } from '../utils/categorySettings';
 
@@ -56,20 +57,9 @@ export function MovementForm({
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const isIngreso = activeType === 'income';
-    const isGasto = activeType === 'expense';
     const amount = Number(form.amount);
     const availableBalance = accountBalances.disponible[form.channel];
-
-    let error: string | null = null;
-
-    if (isIngreso) {
-      error = null;
-    }
-
-    if (isGasto && amount > availableBalance) {
-      error = 'Saldo insuficiente';
-    }
+    const error = getMovementBalanceError(activeType, amount, availableBalance);
 
     if (error) {
       setFeedback({ type: 'error', text: error });

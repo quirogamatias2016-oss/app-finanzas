@@ -1,7 +1,4 @@
-import {
-  getCachedProjectionLookbackMonths,
-  saveProjectionCloud,
-} from '../services/configCloud';
+import { loadAppState, patchAppState } from '../services/appStorage';
 import { PROJECTION_MONTHS_DEFAULT, PROJECTION_MONTHS_MAX, PROJECTION_MONTHS_MIN } from './expenseProjection';
 
 export const PROJECTION_UPDATED_EVENT = 'projection-updated';
@@ -14,12 +11,18 @@ function normalizeLookbackMonths(value: number): number {
 }
 
 export function loadProjectionLookbackMonths(): number {
-  return normalizeLookbackMonths(getCachedProjectionLookbackMonths() || PROJECTION_MONTHS_DEFAULT);
+  return normalizeLookbackMonths(
+    loadAppState().projection.lookbackMonths || PROJECTION_MONTHS_DEFAULT,
+  );
 }
 
 export async function saveProjectionLookbackMonths(lookbackMonths: number): Promise<number> {
   const normalized = normalizeLookbackMonths(lookbackMonths);
 
-  await saveProjectionCloud(normalized);
+  patchAppState((state) => ({
+    ...state,
+    projection: { lookbackMonths: normalized },
+  }));
+  window.dispatchEvent(new Event(PROJECTION_UPDATED_EVENT));
   return normalized;
 }

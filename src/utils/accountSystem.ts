@@ -88,6 +88,27 @@ export function getDisponibleTotal(balances: AccountBalances): number {
   return getAccountTotal(balances, 'disponible');
 }
 
+/** Ingresos siempre permitidos; gastos solo si hay saldo en Caja (canal). */
+export function validateCajaTransaction(
+  type: Movement['type'],
+  amount: number,
+  channelBalance: number,
+): { valid: true } | { valid: false; message: string } {
+  if (type === 'income') {
+    return { valid: true };
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { valid: false, message: 'Ingresa un monto válido.' };
+  }
+
+  if (channelBalance + BALANCE_EPSILON < amount) {
+    return { valid: false, message: INSUFFICIENT_BALANCE_MESSAGE };
+  }
+
+  return { valid: true };
+}
+
 export function getAhorrosTotal(balances: AccountBalances): number {
   return getAccountTotal(balances, 'ahorros');
 }

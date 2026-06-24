@@ -6,9 +6,9 @@ try {
 
   console.log("🚀 Auto deploy iniciado...");
 
-  run("git add .");
-  run('git commit -m "auto update from cursor"');
-  run("git push");
+  run('git add .');
+  run('git commit -m "update app"');
+  run('git push origin main');
 
   console.log("✅ Deploy enviado a GitHub");
 

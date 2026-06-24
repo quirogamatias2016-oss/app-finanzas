@@ -90,7 +90,7 @@ export default function HomeProjectionSection() {
       </p>
 
       <p className="home-projection__meta">
-        Promedio {projection.lookbackLabel} · Solo gastos fijos
+        Promedio {projection.lookbackLabel} · Fijos + recurrentes
       </p>
 
       <Link to={ROUTES.CONFIGURACION} className="home-projection__link">

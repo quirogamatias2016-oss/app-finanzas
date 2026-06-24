@@ -1,9 +1,6 @@
 import type { ExpenseKind, MovementType } from '../types';
-import {
-  getCachedCategoryPayload,
-  saveCategoriesCloud,
-  type CategoryCloudPayload,
-} from '../services/configCloud';
+import { loadAppState, patchAppState } from '../services/appStorage';
+import type { AppCategorySettings } from '../services/appStorage';
 import {
   DEFAULT_EXPENSE_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORY_KINDS,
@@ -29,8 +26,8 @@ function mergeLists(defaults: readonly string[], custom: string[]): string[] {
   );
 }
 
-function loadPayload(): CategoryCloudPayload {
-  return getCachedCategoryPayload();
+function loadPayload(): AppCategorySettings {
+  return loadAppState().categories;
 }
 
 export function loadCategoryLists(): {
@@ -85,15 +82,17 @@ export async function setExpenseCategoryKind(
   const expenseKinds = { ...lists.expenseKinds, [normalized]: kind };
 
   try {
-    await saveCategoriesCloud({
-      version: 2,
-      income: payload.income,
-      expense: payload.expense,
-      expenseKinds,
-    });
+    patchAppState((state) => ({
+      ...state,
+      categories: {
+        ...payload,
+        expenseKinds,
+      },
+    }));
+    window.dispatchEvent(new Event(CATEGORIES_UPDATED_EVENT));
     return { success: true };
   } catch {
-    return { success: false, message: 'No se pudo guardar en Firebase.' };
+    return { success: false, message: 'No se pudo guardar en el dispositivo.' };
   }
 }
 
@@ -122,29 +121,36 @@ export async function addCategory(
   const nextCustom = [...current, normalized];
 
   try {
-    if (type === 'income') {
-      await saveCategoriesCloud({
-        version: 2,
-        income: nextCustom,
-        expense: payload.expense,
-        expenseKinds: payload.expenseKinds ?? { ...DEFAULT_EXPENSE_CATEGORY_KINDS },
-      });
-    } else {
+    patchAppState((state) => {
+      if (type === 'income') {
+        return {
+          ...state,
+          categories: {
+            income: nextCustom,
+            expense: payload.expense,
+            expenseKinds: payload.expenseKinds ?? { ...DEFAULT_EXPENSE_CATEGORY_KINDS },
+          },
+        };
+      }
+
       const expenseKinds = {
         ...(payload.expenseKinds ?? { ...DEFAULT_EXPENSE_CATEGORY_KINDS }),
         [normalized]: expenseKind,
       };
 
-      await saveCategoriesCloud({
-        version: 2,
-        income: payload.income,
-        expense: nextCustom,
-        expenseKinds,
-      });
-    }
+      return {
+        ...state,
+        categories: {
+          income: payload.income,
+          expense: nextCustom,
+          expenseKinds,
+        },
+      };
+    });
 
+    window.dispatchEvent(new Event(CATEGORIES_UPDATED_EVENT));
     return { success: true };
   } catch {
-    return { success: false, message: 'No se pudo guardar en Firebase.' };
+    return { success: false, message: 'No se pudo guardar en el dispositivo.' };
   }
 }

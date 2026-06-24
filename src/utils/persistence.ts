@@ -1,35 +1,36 @@
 import type { Movement, User } from '../types';
-import { getCachedUser, saveUserToCloud } from '../services/userCloud';
 
-/** @deprecated Firestore es la fuente de verdad para movimientos. */
+/** @deprecated Usar appStorage (localStorage key app-finanzas). */
 export function loadTransactions(): Readonly<Movement>[] {
   return [];
 }
 
-/** @deprecated Firestore es la fuente de verdad para movimientos. */
+/** @deprecated Usar appStorage. */
 export function loadInitialTransactions(): Readonly<Movement>[] {
   return [];
 }
 
-/** @deprecated Firestore es la fuente de verdad para movimientos. */
+/** @deprecated Usar appStorage. */
 export function saveTransactions(_transactions: Readonly<Movement>[]): void {
   // noop
 }
 
 export function clearTransactions(): void {
-  // noop — los movimientos viven en Firebase
+  // noop
 }
 
+/** @deprecated App local sin usuarios. */
 export function loadUser(): User | null {
-  return getCachedUser();
+  return null;
 }
 
-export async function saveUser(user: User): Promise<void> {
-  await saveUserToCloud(user);
+/** @deprecated App local sin usuarios. */
+export async function saveUser(_user: User): Promise<void> {
+  // noop
 }
 
 export function clearUser(): void {
-  // El usuario se gestiona vía Firebase; la sesión local se limpia en session.ts
+  // noop
 }
 
 export function loadAppSnapshot(): { user: User | null; transactions: Movement[] } {
