@@ -1,0 +1,19 @@
+---
+description: Después de cada tarea completada, hacer commit y push automático
+alwaysApply: true
+---
+
+Al terminar cualquier cambio de código (implementación, fix, refactor):
+
+1. Ejecutar en terminal:
+   ```
+   git add .
+   git commit -m "actualización app"
+   git push
+   ```
+
+2. No incluir `.env` ni secretos (debe estar en `.gitignore`).
+
+3. Si no hay cambios que commitear, omitir el commit.
+
+4. Informar al usuario que el push se completó (o el error si falla).
