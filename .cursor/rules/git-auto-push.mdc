@@ -7,10 +7,9 @@ Al terminar cualquier cambio de código (implementación, fix, refactor):
 
 1. Ejecutar en terminal:
    ```
-   git add .
-   git commit -m "actualización app"
-   git push
+   npm run deploy
    ```
+   (equivale a `git add .`, commit y push hacia GitHub → Vercel rebuild)
 
 2. No incluir `.env` ni secretos (debe estar en `.gitignore`).
 
